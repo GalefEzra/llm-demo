@@ -25,8 +25,9 @@
     },
     
     /* Environment */
-    "types": ["vite/client"]
+    "types": ["vite/client", "node"],
+    "typeRoots": ["./node_modules/@types", "./src/types"]
   },
-  "include": ["src"],
+  "include": ["src", "env.d.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 } 
