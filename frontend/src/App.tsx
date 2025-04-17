@@ -38,6 +38,7 @@ import {
   ListItem,
 } from '@chakra-ui/react';
 import { ChevronDownIcon } from '@chakra-ui/icons';
+import { API_URL, getApiUrl } from './config';
 
 interface TokenizedSentence {
   original: string;
@@ -177,6 +178,29 @@ const ContextDropdown = ({ nWords, options, selectedValue, onChange }: {
   );
 };
 
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 10000) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+};
+
 function App() {
   const [input, setInput] = useState('');
   const [results, setResults] = useState<ProcessResponse | null>(null);
@@ -215,70 +239,70 @@ function App() {
 
   const fetchContextOptions = async (nWords: number) => {
     try {
-      const response = await fetch(`http://localhost:8000/get_context_options/${nWords}`, {
+      setIsLoading(true);
+      const sentences = input.split('\n').filter(s => s.trim());
+      
+      if (sentences.length === 0) {
+        throw new Error('Please enter at least one sentence');
+      }
+
+      const response = await fetchWithTimeout(`${getApiUrl()}/get_context_options/${nWords}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          sentences: input.split('\n').filter(s => s.trim()),
-        }),
+        body: JSON.stringify({ sentences }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch context options');
-      }
 
       const data: ContextPredictionResponse = await response.json();
-      console.log(`Received context options for ${nWords} words:`, data.context_options);
-      
-      setContextPredictions(prev => ({
-        ...prev,
-        [nWords]: data.predictions
-      }));
-      return data.context_options;
+      setContextOptions(prev => ({ ...prev, [nWords]: data.context_options }));
     } catch (error) {
-      console.error(`Error fetching ${nWords}-word context options:`, error);
+      console.error('Error fetching context options:', error);
       toast({
         title: 'Error',
-        description: 'Failed to fetch context options',
+        description: error instanceof Error ? error.message : 'Failed to fetch context options',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       });
-      return [];
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const fetchPredictions = async (nWords: number, context: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/get_predictions/${nWords}?context=${encodeURIComponent(context)}`, {
+      setIsLoading(true);
+      const sentences = input.split('\n').filter(s => s.trim());
+      
+      if (sentences.length === 0) {
+        throw new Error('Please enter at least one sentence');
+      }
+
+      const response = await fetchWithTimeout(`${getApiUrl()}/get_predictions/${nWords}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          sentences: input.split('\n').filter(s => s.trim())
+          context,
+          sentences,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch predictions');
-      }
-
-      const data: ContextPrediction[] = await response.json();
-      setContextPredictions(prev => ({
-        ...prev,
-        [nWords]: data
-      }));
+      const predictions: ContextPrediction[] = await response.json();
+      setContextPredictions(prev => ({ ...prev, [nWords]: predictions }));
     } catch (error) {
+      console.error('Error fetching predictions:', error);
       toast({
         title: 'Error',
-        description: 'Failed to fetch predictions',
+        description: error instanceof Error ? error.message : 'Failed to fetch predictions',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -289,7 +313,7 @@ function App() {
         [nWords]: context
       }));
 
-      const response = await fetch(`http://localhost:8000/get_predictions/${nWords}?context=${encodeURIComponent(context)}`, {
+      const response = await fetch(`${API_URL}/get_predictions/${nWords}?context=${encodeURIComponent(context)}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -441,78 +465,37 @@ function App() {
   };
 
   const handleSubmit = async () => {
-    if (!input.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Please enter some sentences',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    setResults(null);
-    setContextPredictions({});
-    setSelectedContext({});
-    setContextOptions({});
-    tokenColors.clear();
-
     try {
-      // Fetch context options for each n-gram size
-      const [oneWordOpts, twoWordOpts, threeWordOpts, fourWordOpts] = await Promise.all([
-        fetchContextOptions(1),
-        fetchContextOptions(2),
-        fetchContextOptions(3),
-        fetchContextOptions(4)
-      ]);
+      setIsLoading(true);
+      const sentences = input.split('\n').filter(s => s.trim());
+      
+      if (sentences.length === 0) {
+        throw new Error('Please enter at least one sentence');
+      }
 
-      // Store all context options
-      setContextOptions({
-        1: oneWordOpts,
-        2: twoWordOpts,
-        3: threeWordOpts,
-        4: fourWordOpts
-      });
-
-      // Set initial selected contexts
-      if (oneWordOpts.length > 0) setSelectedContext(prev => ({ ...prev, 1: oneWordOpts[0].context }));
-      if (twoWordOpts.length > 0) setSelectedContext(prev => ({ ...prev, 2: twoWordOpts[0].context }));
-      if (threeWordOpts.length > 0) setSelectedContext(prev => ({ ...prev, 3: threeWordOpts[0].context }));
-      if (fourWordOpts.length > 0) setSelectedContext(prev => ({ ...prev, 4: fourWordOpts[0].context }));
-
-      // Fetch initial predictions
-      await Promise.all([
-        oneWordOpts[0] && fetchPredictions(1, oneWordOpts[0].context),
-        twoWordOpts[0] && fetchPredictions(2, twoWordOpts[0].context),
-        threeWordOpts[0] && fetchPredictions(3, threeWordOpts[0].context),
-        fourWordOpts[0] && fetchPredictions(4, fourWordOpts[0].context)
-      ]);
-
-      // Fetch the original results
-      const response = await fetch('http://localhost:8000/process', {
+      const response = await fetchWithTimeout(`${getApiUrl()}/process`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          sentences: input.split('\n').filter(s => s.trim()),
-        }),
+        body: JSON.stringify({ sentences }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to process sentences');
-      }
-
-      const data = await response.json();
+      const data: ProcessResponse = await response.json();
       setResults(data);
+      
+      // Reset context-related state
+      setContextOptions({});
+      setSelectedContext({});
+      setContextPredictions({});
+      
     } catch (error) {
+      console.error('Error processing sentences:', error);
       toast({
         title: 'Error',
-        description: 'Failed to process sentences',
+        description: error instanceof Error ? error.message : 'Failed to process sentences',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       });
     } finally {
