@@ -17,16 +17,16 @@ RUN for i in 1 2 3; do \
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Set working directory
-WORKDIR /app
+WORKDIR /app/backend
 
 # Copy and install Python dependencies with retry mechanism
-COPY ./backend/requirements.txt requirements.txt
+COPY backend/requirements.txt ./requirements.txt
 RUN for i in 1 2 3; do \
     pip install --no-cache-dir -r requirements.txt && break || sleep 15; \
     done
 
 # Copy backend files
-COPY ./backend/ ./
+COPY backend/ ./
 
 # Expose port
 EXPOSE 8000
