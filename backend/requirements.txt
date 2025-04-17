@@ -1,9 +1,9 @@
 fastapi==0.104.1
 uvicorn==0.24.0
-regex==2023.10.3
-numpy==1.26.0
+tiktoken==0.4.0
 pydantic==2.5.1
 python-dotenv==1.0.0
 python-multipart==0.0.6
-requests==2.31.0
-tiktoken @ https://github.com/openai/tiktoken/releases/download/v0.4.0/tiktoken-0.4.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl 
+numpy==1.26.0
+regex==2023.10.3
+requests==2.31.0 
