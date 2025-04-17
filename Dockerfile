@@ -20,20 +20,14 @@ RUN rustc --version && cargo --version && \
 # Set working directory
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY backend/requirements.txt requirements.txt
+# Copy backend files first
+COPY backend/ ./
 
-# Install Python dependencies without using a virtual environment
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend files
-COPY backend/ backend/
-
-# Set working directory to backend
-WORKDIR /app/backend
-
-# Expose port
-EXPOSE 8000
+# Default port
+ENV PORT=8000
 
 # Start the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT} 
