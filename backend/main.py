@@ -12,7 +12,12 @@ app = FastAPI()
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Update this with your frontend URL in production
+    allow_origins=[
+        "https://llm-demo-henna.vercel.app",  # Production frontend
+        "http://localhost:5173",              # Local development frontend
+        "https://llm-demo-*",                # Any Vercel preview deployments
+        "https://*.vercel.app",              # Any Vercel app
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
