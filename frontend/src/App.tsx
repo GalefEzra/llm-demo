@@ -178,7 +178,12 @@ const ContextDropdown = ({ nWords, options, selectedValue, onChange }: {
   );
 };
 
-const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 10000) => {
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 30000) => {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
 
@@ -186,6 +191,12 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout 
     const response = await fetch(url, {
       ...options,
       signal: controller.signal,
+      headers: {
+        ...options.headers,
+        'Content-Type': 'application/json',
+      },
+      mode: 'cors',
+      credentials: 'omit'
     });
     clearTimeout(id);
 
@@ -197,8 +208,26 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout 
     return response;
   } catch (error) {
     clearTimeout(id);
-    throw error;
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out. Please try again.');
+      }
+      throw error;
+    }
+    throw new Error('An unexpected error occurred');
   }
+};
+
+const fetchWithRetry = async (url: string, options: RequestInit = {}, retries = MAX_RETRIES) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fetchWithTimeout(url, options);
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      await sleep(RETRY_DELAY * (i + 1)); // Exponential backoff
+    }
+  }
+  throw new Error('Max retries reached');
 };
 
 function App() {
@@ -246,11 +275,8 @@ function App() {
         throw new Error('Please enter at least one sentence');
       }
 
-      const response = await fetchWithTimeout(`${getApiUrl()}/get_context_options/${nWords}`, {
+      const response = await fetchWithRetry(`${getApiUrl()}/get_context_options/${nWords}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ sentences }),
       });
 
@@ -279,11 +305,8 @@ function App() {
         throw new Error('Please enter at least one sentence');
       }
 
-      const response = await fetchWithTimeout(`${getApiUrl()}/get_predictions/${nWords}`, {
+      const response = await fetchWithRetry(`${getApiUrl()}/get_predictions/${nWords}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           context,
           sentences,
@@ -473,11 +496,8 @@ function App() {
         throw new Error('Please enter at least one sentence');
       }
 
-      const response = await fetchWithTimeout(`${getApiUrl()}/process`, {
+      const response = await fetchWithRetry(`${getApiUrl()}/process`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ sentences }),
       });
 
