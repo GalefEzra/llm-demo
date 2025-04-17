@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11.6-slim
 
 # Update package lists and install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -13,8 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Verify Rust installation
-RUN rustc --version && cargo --version
+# Verify Rust installation and update pip
+RUN rustc --version && cargo --version && \
+    pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Set working directory
 WORKDIR /app
@@ -22,7 +23,7 @@ WORKDIR /app
 # Copy requirements first for better caching
 COPY backend/requirements.txt requirements.txt
 
-# Install Python dependencies
+# Install Python dependencies without using a virtual environment
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend files
